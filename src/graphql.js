@@ -10,69 +10,82 @@ const genSenderID = () => {
     return crypto.randomBytes(8).toString('hex')
 }
 
-const Messages = []
+const Messages = [
+    {
+        id: genMessageID(),
+        sender: '9',
+        text: 'Hello',
+        time: new Date().getTime()
+    },
+    {
+        id: genMessageID(),
+        sender: '9',
+        text: 'Helloo',
+        time: new Date().getTime()
+    },
+    {
+        id: genMessageID(),
+        sender: '9',
+        text: 'Hellooo',
+        time: new Date().getTime()
+    },
+    {
+        id: genMessageID(),
+        sender: '9',
+        text: 'Helloooo',
+        time: new Date().getTime()
+    },
+    {
+        id: genMessageID(),
+        sender: '9',
+        text: 'Hellooooo',
+        time: new Date().getTime()
+    },
+]
 const pubsub = new PubSub()
 
 const typeDefs = gql`
     scalar Date
     type Query {
-        Messages(page: Int!): Messages!
+        Messages(lastIndex: Int): Messages!
     }
     type Mutation {
-        createProfile(name: String!, avatar: Int!): Auth!
-        addMessage(text: String!): Message!
+        sendMessage(text: String!): Message!
     }
     type Subscription {
         messageAdded: Message!
     }
     type Messages {
         items: [Message]!
-        hasPrev: Boolean
+        lastIndex: Int!
+        hasPrev: Boolean!
     }
     type Message {
         id: String!
-        sender: Sender
+        sender: String
         text: String
         time: Date
-    }
-    type Auth {
-        token: String!
-    }
-    type Sender {
-        id: String!
-        name: String
-        avatar: Int
     }
 `
 
 const resolvers = {
     Query: {
-        Messages: (parent, { page }) => {
+        Messages: (parent, { lastIndex = Messages.length }) => {
+            const start = lastIndex - 3 > 0 ? lastIndex - 3 : 0
+            const end = lastIndex
             return {
-                items: Messages,
-                hasPrev: false
+                items: Messages.slice(start, end),
+                lastIndex: start,
+                hasPrev: lastIndex - 3 > 0
             }
         }
     },
     Mutation: {
-        createProfile: (parent, { name, avatar }) => {
-            return {
-                token: jwt.sign({
-                    id: genSenderID(),
-                    name: name,
-                    avatar: avatar
-                }, secretJWT)
-            }
-        },
-        addMessage: (parent, { text }, context) => {
-            if (context.currentUser) {
+        sendMessage: (parent, { text }, context) => {
+            if (context.auth) {
                 const newMessage = {
                     id: genMessageID(),
-                    sender: {
-                        id: context.currentUser.id,
-                        name: context.currentUser.name,
-                        avatar: context.currentUser.avatar
-                    },
+                    sender: context.auth,
                     text: text,
                     time: new Date().getTime()
                 }
@@ -102,18 +115,13 @@ exports.graphQLConfig = {
             return connection.context
         } else {
             // check from req
-            try {
-                const authorization = req.headers.authorization
-                if (authorization && authorization !== '') {
-                    const decoded = jwt.verify(authorization, secretJWT)
-                    req.currentUser = decoded
-                } else {
-                    throw new Error('Invalid Authorization.')
-                }
-            } catch (err) {
-                req.currentUser = null
+            const authorization = req.headers.authorization
+            if (authorization && authorization !== '' && authorization.split('-').length >= 2) {
+                return { auth: authorization }
+            } else {
+                throw new Error('Invalid Authorization.')
             }
-            return req
+            return {}
         }
     },
     playground: true
